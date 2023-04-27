@@ -9,11 +9,35 @@ import (
 	"net/rpc"
 	"os"
 	"regexp"
+	"sync"
+	"time"
+
+	"github.com/golang/glog"
 )
+
+type MapTask struct {
+	file      string
+	taskId    int
+	startTime time.Time
+}
+
+type ReduceTask struct {
+	files     []string
+	taskId    int
+	startTime time.Time
+}
 
 type Coordinator struct {
 	// Your definitions here.
+	sync.Mutex
 
+	taskId int
+
+	MapTask        []string
+	PendingMapTask map[int]MapTask
+
+	ReduceTask        []string
+	PendingReduceTask map[int]ReduceTask
 }
 
 // Your code here -- RPC handlers for the worker to call.
@@ -26,11 +50,41 @@ func (c *Coordinator) Example(args *ExampleArgs, reply *ExampleReply) error {
 	return nil
 }
 
+func (c *Coordinator) AllocTaskId() int {
+	shouldUnlock := c.TryLock()
+	t := c.taskId
+	c.taskId += 1
+	if shouldUnlock {
+		c.Unlock()
+	}
+	return t
+}
+
 func (c *Coordinator) GetTask(args *GetTaskArg, reply *GetTaskReply) error {
+	c.Lock()
+	defer c.Unlock()
+
+	// 应该优化一下
+	if len(c.MapTask) > 0 {
+		c.getMapTask(reply)
+	} else if len(c.ReduceTask) > 2 {
+		c.getReduceTask(reply)
+	} else {
+		// 判断结束，或者等待
+	}
 	reply.TaskType = 0
-	reply.TaskId = 1
+	reply.TaskId = c.taskId
+	c.taskId += c.AllocTaskId()
 	reply.TaskFiles = make([]string, 0, 2)
 	return nil
+}
+
+func (c *Coordinator) getMapTask(reply *GetTaskReply) {
+
+}
+
+func (c *Coordinator) getReduceTask(reply *GetTaskReply) {
+
 }
 
 func (c *Coordinator) TaskFinish(args *TaskFinishArg, reply *TaskFinishReply) error {
@@ -69,12 +123,24 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c := Coordinator{}
 
 	// Your code here.
+	res := filtInputFile(files[0])
+
+	glog.Infof("%d file in total", len(res))
+
+	c.MapTask = append(c.MapTask, res...)
+
+	c.server()
+
+	return &c
+}
+
+func filtInputFile(s string) []string {
+	res := make([]string, 0, 10)
 	file, err := ioutil.ReadDir(".")
 	if err != nil {
 		fmt.Print(err.Error())
 	}
-	re := regexp.MustCompile(files[0])
-	res := make([]string, 0, 10)
+	re := regexp.MustCompile(s)
 	for _, f := range file {
 		if !f.IsDir() {
 			if re.Match([]byte(f.Name())) {
@@ -82,8 +148,5 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 			}
 		}
 	}
-	fmt.Println(res)
-
-	c.server()
-	return &c
+	return res
 }

@@ -30,9 +30,12 @@ type GetTaskArg struct {
 }
 
 type GetTaskReply struct {
-	TaskId    int
+	// 0 for no task, 1 for Map, 2 for reduce
 	TaskType  int
+	TaskId    int
 	TaskFiles []string
+
+	SpecifiedResultFileName string
 }
 
 type TaskFinishArg struct {

@@ -18,8 +18,14 @@
 			"problemMatcher": [
 				"$go"
 			],
+			
 			"group": "build",
-			"detail": ""
+			"detail": "",
+			"presentation": { 
+				"reveal": "silent",
+	            "panel": "shared",
+				"echo": true,
+            }
 		},
 	]
 }

@@ -1,11 +1,14 @@
 package mr
 
 import (
+	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"net/rpc"
 	"os"
+	"regexp"
 )
 
 type Coordinator struct {
@@ -24,7 +27,14 @@ func (c *Coordinator) Example(args *ExampleArgs, reply *ExampleReply) error {
 }
 
 func (c *Coordinator) GetTask(args *GetTaskArg, reply *GetTaskReply) error {
+	reply.TaskType = 0
+	reply.TaskId = 1
+	reply.TaskFiles = make([]string, 0, 2)
+	return nil
+}
 
+func (c *Coordinator) TaskFinish(args *TaskFinishArg, reply *TaskFinishReply) error {
+	reply.TaskId = 0
 	return nil
 }
 
@@ -59,6 +69,20 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c := Coordinator{}
 
 	// Your code here.
+	file, err := ioutil.ReadDir(".")
+	if err != nil {
+		fmt.Print(err.Error())
+	}
+	re := regexp.MustCompile(files[0])
+	res := make([]string, 0, 10)
+	for _, f := range file {
+		if !f.IsDir() {
+			if re.Match([]byte(f.Name())) {
+				res = append(res, f.Name())
+			}
+		}
+	}
+	fmt.Println(res)
 
 	c.server()
 	return &c

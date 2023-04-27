@@ -1,0 +1,25 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "go",
+			"label": "Compile_wc",
+			"command": "build",
+			"options": {
+				"cwd": "${workspaceFolder}/src/main"
+			},
+			"args": [
+				
+				"-buildmode=plugin",
+				"-gcflags=all=-N -l",
+				"/home/chenhong/6.5840/src/mrapps/wc.go",
+				
+			],
+			"problemMatcher": [
+				"$go"
+			],
+			"group": "build",
+			"detail": ""
+		},
+	]
+}

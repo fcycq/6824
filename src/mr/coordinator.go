@@ -121,7 +121,26 @@ func (c *Coordinator) noTaskLeft(reply *GetTaskReply) {
 }
 
 func (c *Coordinator) TaskFinish(args *TaskFinishArg, reply *TaskFinishReply) error {
-	reply.TaskId = 0
+	if c.TryLock() {
+		defer c.Unlock()
+	}
+
+	taskId := args.TaskId
+	if info, found := c.PendingMapTask[taskId]; found {
+		delete(c.PendingMapTask, taskId)
+		if args.TaskSuccess {
+			c.ReduceTask = append(c.ReduceTask, args.ResultName)
+		} else {
+			c.MapTask = append(c.MapTask, info.taskInfo.TaskFiles...)
+		}
+	} else if info, found := c.PendingReduceTask[taskId]; found {
+		delete(c.PendingReduceTask, taskId)
+		if args.TaskSuccess {
+			c.ReduceTask = append(c.ReduceTask, args.ResultName)
+		} else {
+			c.ReduceTask = append(c.ReduceTask, info.taskInfo.TaskFiles...)
+		}
+	}
 	return nil
 }
 
@@ -152,6 +171,26 @@ func (c *Coordinator) Done() bool {
 	return ret
 }
 
+func (c *Coordinator) scanTask() {
+	for {
+		time.Sleep(10 * time.Second)
+		c.Lock()
+		for taskId, task := range c.PendingMapTask {
+			if time.Since(task.time) > 20*time.Second {
+				finishArg := TaskFinishArg{}
+				finishArg.TaskId = taskId
+				finishArg.TaskSuccess = false
+				finishArg.ResultName = ""
+
+				finishReply := TaskFinishReply{}
+
+				c.TaskFinish(&finishArg, &finishReply)
+			}
+		}
+		c.Unlock()
+	}
+}
+
 // create a Coordinator.
 // main/mrcoordinator.go calls this function.
 // nReduce is the number of reduce tasks to use.
@@ -168,6 +207,7 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 
 	c.MapTask = append(c.MapTask, res...)
 
+	go c.scanTask()
 	c.server()
 
 	return &c

@@ -39,7 +39,9 @@ type GetTaskReply struct {
 }
 
 type TaskFinishArg struct {
-	TaskId int
+	TaskId      int
+	TaskSuccess bool
+	ResultName  string
 }
 
 type TaskFinishReply struct {

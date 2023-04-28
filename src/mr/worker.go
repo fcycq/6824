@@ -47,16 +47,14 @@ func Worker(mapf func(string, string) []KeyValue,
 		if reply.TaskType == 2 {
 			err = Map(mapf, reply)
 		} else if reply.TaskType == 3 {
-
+			break
 		} else if reply.TaskType == 1 {
 			time.Sleep(1 * time.Second)
+			continue
 		}
 
-		if err != nil {
+		CallFinish(reply, err)
 
-		} else {
-
-		}
 	}
 
 }
@@ -116,6 +114,25 @@ func CallGetTask() *GetTaskReply {
 		fmt.Printf("call failed!\n")
 	}
 	return &reply
+}
+
+func CallFinish(task *GetTaskReply, err error) {
+	args := TaskFinishArg{}
+	reply := TaskFinishReply{}
+
+	args.TaskId = task.TaskId
+	if err != nil {
+		args.TaskSuccess = false
+	} else {
+		args.TaskSuccess = true
+	}
+	args.ResultName = genOutputName(task)
+
+	ok := call("Coordinator.TaskFinish", &args, &reply)
+	if !ok {
+		glog.Warning("fail to call TaskFinish")
+	}
+
 }
 
 // example function to show how to make an RPC call to the coordinator.

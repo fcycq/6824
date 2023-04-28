@@ -15,16 +15,9 @@ import (
 	"github.com/golang/glog"
 )
 
-type MapTask struct {
-	file      string
-	taskId    int
-	startTime time.Time
-}
-
-type ReduceTask struct {
-	files     []string
-	taskId    int
-	startTime time.Time
+type Task struct {
+	taskInfo GetTaskReply
+	time     time.Time
 }
 
 type Coordinator struct {
@@ -34,10 +27,12 @@ type Coordinator struct {
 	taskId int
 
 	MapTask        []string
-	PendingMapTask map[int]MapTask
+	PendingMapTask map[int]Task
 
 	ReduceTask        []string
-	PendingReduceTask map[int]ReduceTask
+	PendingReduceTask map[int]Task
+
+	finishFlag bool
 }
 
 // Your code here -- RPC handlers for the worker to call.
@@ -65,26 +60,64 @@ func (c *Coordinator) GetTask(args *GetTaskArg, reply *GetTaskReply) error {
 	defer c.Unlock()
 
 	// 应该优化一下
+
 	if len(c.MapTask) > 0 {
-		c.getMapTask(reply)
+		taskRecorder := c.getMapTask(reply)
+		c.PendingMapTask[taskRecorder.taskInfo.TaskId] = taskRecorder
 	} else if len(c.ReduceTask) > 2 {
-		c.getReduceTask(reply)
+		taskRecorder := c.getReduceTask(reply)
+		c.PendingReduceTask[taskRecorder.taskInfo.TaskId] = taskRecorder
 	} else {
+		if len(c.PendingMapTask) > 0 || len(c.PendingReduceTask) > 0 {
+			c.waitTask(reply)
+		} else {
+			if len(c.PendingReduceTask) == 1 {
+				c.finishFlag = true
+				c.noTaskLeft(reply)
+			} else {
+				glog.Fatal("task inconsistent")
+			}
+		}
 		// 判断结束，或者等待
 	}
-	reply.TaskType = 0
-	reply.TaskId = c.taskId
-	c.taskId += c.AllocTaskId()
-	reply.TaskFiles = make([]string, 0, 2)
+
 	return nil
 }
 
-func (c *Coordinator) getMapTask(reply *GetTaskReply) {
+func (c *Coordinator) getMapTask(reply *GetTaskReply) (t Task) {
+	reply.TaskType = 2
+	reply.TaskId = c.AllocTaskId()
+	reply.TaskFiles = make([]string, 1)
+	reply.TaskFiles[0] = c.MapTask[0]
+
+	c.MapTask = c.MapTask[1:]
+
+	t.taskInfo = *reply
+	t.time = time.Now()
+	return
 
 }
 
-func (c *Coordinator) getReduceTask(reply *GetTaskReply) {
+func (c *Coordinator) getReduceTask(reply *GetTaskReply) (t Task) {
+	reply.TaskType = 3
+	reply.TaskFiles = make([]string, 2, 2)
+	reply.TaskFiles[0] = c.ReduceTask[0]
+	reply.TaskFiles[1] = c.ReduceTask[1]
 
+	c.ReduceTask = c.ReduceTask[2:]
+
+	t.taskInfo = *reply
+	t.time = time.Now()
+	return
+
+}
+
+func (c *Coordinator) waitTask(reply *GetTaskReply) {
+	reply.TaskType = 1
+}
+
+func (c *Coordinator) noTaskLeft(reply *GetTaskReply) {
+	reply.TaskType = 0
 }
 
 func (c *Coordinator) TaskFinish(args *TaskFinishArg, reply *TaskFinishReply) error {
@@ -112,6 +145,9 @@ func (c *Coordinator) Done() bool {
 	ret := false
 
 	// Your code here.
+	c.Lock()
+	defer c.Unlock()
+	ret = c.finishFlag
 
 	return ret
 }
@@ -123,6 +159,9 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c := Coordinator{}
 
 	// Your code here.
+	c.finishFlag = false
+	c.PendingMapTask = make(map[int]Task)
+	c.PendingReduceTask = make(map[int]Task)
 	res := filtInputFile(files[0])
 
 	glog.Infof("%d file in total", len(res))

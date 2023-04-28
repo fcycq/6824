@@ -30,7 +30,7 @@ type GetTaskArg struct {
 }
 
 type GetTaskReply struct {
-	// 0 for no task, 1 for Map, 2 for reduce
+	// 0 for no task, 1 for wait, 2 for Map, 3 for reduce
 	TaskType  int
 	TaskId    int
 	TaskFiles []string

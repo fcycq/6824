@@ -100,6 +100,7 @@ func (c *Coordinator) getMapTask(reply *GetTaskReply) (t Task) {
 
 func (c *Coordinator) getReduceTask(reply *GetTaskReply) (t Task) {
 	reply.TaskType = 3
+	reply.TaskId = c.AllocTaskId()
 	reply.TaskFiles = make([]string, 2, 2)
 	reply.TaskFiles[0] = c.ReduceTask[0]
 	reply.TaskFiles[1] = c.ReduceTask[1]

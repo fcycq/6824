@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"bufio"
 	"fmt"
 	"hash/fnv"
 	"io/ioutil"
@@ -47,7 +48,7 @@ func Worker(mapf func(string, string) []KeyValue,
 		if reply.TaskType == 2 {
 			err = Map(mapf, reply)
 		} else if reply.TaskType == 3 {
-			break
+			err = Reduce(reducef, reply)
 		} else if reply.TaskType == 1 {
 			time.Sleep(1 * time.Second)
 			continue
@@ -84,22 +85,85 @@ func Map(mapf func(string, string) []KeyValue, reply *GetTaskReply) error {
 	for _, w := range words {
 		count[w.Key] += 1
 	}
-	countKey := make([]string, 0, len(count)+1)
+	sortedKey := make([]string, 0, len(count)+1)
 	for k, _ := range count {
-		countKey = append(countKey, k)
+		sortedKey = append(sortedKey, k)
 	}
-	sort.Slice(countKey, func(i, j int) bool { return strings.ToLower(countKey[i]) < strings.ToLower(countKey[j]) })
+	sort.Slice(sortedKey, func(i, j int) bool { return strings.ToLower(sortedKey[i]) < strings.ToLower(sortedKey[j]) })
 
 	f, err := os.OpenFile(genOutputName(reply), os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
 		glog.Warningf("fail to open file %s", genOutputName(reply))
 		return err
 	}
-	for _, t := range countKey {
+	for _, t := range sortedKey {
 		line := t + " " + strconv.Itoa(count[t]) + "\n"
 		f.Write(([]byte)(line))
 	}
 	f.Close()
+	return nil
+}
+
+func Reduce(reducef func(string, []string) string, reply *GetTaskReply) error {
+	wordCountMap := make(map[string]int)
+
+	for _, inputFile := range reply.TaskFiles {
+		file, err := os.Open(inputFile)
+		if err != nil {
+			return err
+		}
+
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := scanner.Text()
+			words := strings.Fields(line)
+			if len(words) != 2 {
+				continue
+			}
+			word := words[0]
+			count, err := strconv.Atoi(words[1])
+			if err != nil {
+				continue
+			}
+			wordCountMap[word] += count
+		}
+
+		if err := file.Close(); err != nil {
+			return err
+		}
+	}
+
+	fileName := ""
+	if reply.SpecifiedResultFileName == "" {
+		fileName = genOutputName(reply)
+	} else {
+		fileName = reply.SpecifiedResultFileName
+	}
+	output, err := os.Create(fileName)
+	if err != nil {
+		return err
+	}
+	defer output.Close()
+
+	sortedKey := make([]string, 0, len(wordCountMap)+1)
+	for k, _ := range wordCountMap {
+		sortedKey = append(sortedKey, k)
+	}
+	sort.Slice(sortedKey, func(i, j int) bool { return strings.ToLower(sortedKey[i]) < strings.ToLower(sortedKey[j]) })
+
+	writer := bufio.NewWriter(output)
+	for _, key := range sortedKey {
+		line := fmt.Sprintf("%s %d\n", key, wordCountMap[key])
+		if _, err := writer.WriteString(line); err != nil {
+			return err
+		}
+	}
+
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+
+	return nil
 	return nil
 }
 

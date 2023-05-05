@@ -45,13 +45,17 @@ func Worker(mapf func(string, string) []KeyValue,
 
 		printTask(reply)
 		err := error(nil)
-		if reply.TaskType == 2 {
+		if reply.TaskType == MapTask {
 			err = Map(mapf, reply)
-		} else if reply.TaskType == 3 {
+		} else if reply.TaskType == ReduceTask {
 			err = Reduce(reducef, reply)
-		} else if reply.TaskType == 1 {
+		} else if reply.TaskType == WaitTask {
 			time.Sleep(1 * time.Second)
 			continue
+		} else if reply.TaskType == NoTaskLeft {
+			fmt.Println("no task left")
+		} else {
+			fmt.Printf("unknow task type %d", reply.TaskType)
 		}
 
 		CallFinish(reply, err)
@@ -85,21 +89,19 @@ func Map(mapf func(string, string) []KeyValue, reply *GetTaskReply) error {
 	for _, w := range words {
 		count[w.Key] += 1
 	}
-	sortedKey := make([]string, 0, len(count)+1)
-	for k, _ := range count {
-		sortedKey = append(sortedKey, k)
-	}
-	sort.Slice(sortedKey, func(i, j int) bool { return strings.ToLower(sortedKey[i]) < strings.ToLower(sortedKey[j]) })
 
 	f, err := os.OpenFile(genOutputName(reply), os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
 		glog.Warningf("fail to open file %s", genOutputName(reply))
 		return err
 	}
-	for _, t := range sortedKey {
-		line := t + " " + strconv.Itoa(count[t]) + "\n"
-		f.Write(([]byte)(line))
+
+	err = WriteMapToFile(count, f)
+
+	if err != nil {
+		return err
 	}
+
 	f.Close()
 	return nil
 }
@@ -139,21 +141,29 @@ func Reduce(reducef func(string, []string) string, reply *GetTaskReply) error {
 	} else {
 		fileName = reply.SpecifiedResultFileName
 	}
-	output, err := os.Create(fileName)
+
+	err := WriteMapToFile(wordCountMap, fileName)
+
 	if err != nil {
 		return err
 	}
+
 	defer output.Close()
 
-	sortedKey := make([]string, 0, len(wordCountMap)+1)
-	for k, _ := range wordCountMap {
+	return nil
+}
+
+func WriteMapToFile(count map[string]int, fileName string) error {
+	sortedKey := make([]string, 0, len(count)+1)
+	for k, _ := range count {
 		sortedKey = append(sortedKey, k)
 	}
-	sort.Slice(sortedKey, func(i, j int) bool { return strings.ToLower(sortedKey[i]) < strings.ToLower(sortedKey[j]) })
+	sort.Slice(sortedKey, func(i, j int) bool { return sortedKey[i] < sortedKey[j] })
 
 	writer := bufio.NewWriter(output)
+
 	for _, key := range sortedKey {
-		line := fmt.Sprintf("%s %d\n", key, wordCountMap[key])
+		line := fmt.Sprintf("%s %d\n", key, count[key])
 		if _, err := writer.WriteString(line); err != nil {
 			return err
 		}
@@ -162,8 +172,6 @@ func Reduce(reducef func(string, []string) string, reply *GetTaskReply) error {
 	if err := writer.Flush(); err != nil {
 		return err
 	}
-
-	return nil
 	return nil
 }
 

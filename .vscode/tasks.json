@@ -27,5 +27,22 @@
 				"echo": true,
             }
 		},
+	
+		{
+			"type": "shell",
+			"label": "rm_temp",
+			"command": "rm",
+			"options": {
+				"cwd": "${workspaceFolder}/src/main"
+			},
+			"args": [
+				"temp_*",
+			],
+			"presentation": { 
+				"reveal": "silent",
+	            "panel": "shared",
+				"echo": true,
+            }
+		},
 	]
 }

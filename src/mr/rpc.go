@@ -29,6 +29,13 @@ type ExampleReply struct {
 type GetTaskArg struct {
 }
 
+const (
+	MapTask    = 1
+	ReduceTask = 2
+	WaitTask   = 3
+	NoTaskLeft = 4
+)
+
 type GetTaskReply struct {
 	// 0 for no task, 1 for wait, 2 for Map, 3 for reduce
 	TaskType  int

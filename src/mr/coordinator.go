@@ -64,14 +64,14 @@ func (c *Coordinator) GetTask(args *GetTaskArg, reply *GetTaskReply) error {
 	if len(c.MapTask) > 0 {
 		taskRecorder := c.getMapTask(reply)
 		c.PendingMapTask[taskRecorder.taskInfo.TaskId] = taskRecorder
-	} else if len(c.ReduceTask) > 2 {
+	} else if len(c.ReduceTask) >= 2 {
 		taskRecorder := c.getReduceTask(reply)
 		c.PendingReduceTask[taskRecorder.taskInfo.TaskId] = taskRecorder
 	} else {
 		if len(c.PendingMapTask) > 0 || len(c.PendingReduceTask) > 0 {
 			c.waitTask(reply)
 		} else {
-			if len(c.PendingReduceTask) == 1 {
+			if len(c.ReduceTask) == 1 {
 				c.finishFlag = true
 				c.noTaskLeft(reply)
 			} else {
@@ -85,7 +85,7 @@ func (c *Coordinator) GetTask(args *GetTaskArg, reply *GetTaskReply) error {
 }
 
 func (c *Coordinator) getMapTask(reply *GetTaskReply) (t Task) {
-	reply.TaskType = 2
+	reply.TaskType = MapTask
 	reply.TaskId = c.AllocTaskId()
 	reply.TaskFiles = make([]string, 1)
 	reply.TaskFiles[0] = c.MapTask[0]
@@ -99,9 +99,9 @@ func (c *Coordinator) getMapTask(reply *GetTaskReply) (t Task) {
 }
 
 func (c *Coordinator) getReduceTask(reply *GetTaskReply) (t Task) {
-	reply.TaskType = 3
+	reply.TaskType = ReduceTask
 	reply.TaskId = c.AllocTaskId()
-	reply.TaskFiles = make([]string, 2, 2)
+	reply.TaskFiles = make([]string, 2)
 	reply.TaskFiles[0] = c.ReduceTask[0]
 	reply.TaskFiles[1] = c.ReduceTask[1]
 
@@ -114,11 +114,11 @@ func (c *Coordinator) getReduceTask(reply *GetTaskReply) (t Task) {
 }
 
 func (c *Coordinator) waitTask(reply *GetTaskReply) {
-	reply.TaskType = 1
+	reply.TaskType = WaitTask
 }
 
 func (c *Coordinator) noTaskLeft(reply *GetTaskReply) {
-	reply.TaskType = 0
+	reply.TaskType = NoTaskLeft
 }
 
 func (c *Coordinator) TaskFinish(args *TaskFinishArg, reply *TaskFinishReply) error {
